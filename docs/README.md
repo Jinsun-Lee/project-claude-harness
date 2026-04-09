@@ -1,6 +1,6 @@
 <img src="./banner.svg" alt="Claude Code Docs" width="100%"/>
 
-# Claude Code Docs (KO/EN)
+# [Claude Code Docs (KO/EN)](https://github.com/seilk/claude-code-docs)
 
 > Claude Code 문서 중앙 허브 — 유용한 문서들을 한국어·영어로 정리합니다.
 
