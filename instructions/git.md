@@ -1,0 +1,12 @@
+# Git
+- 커밋 메시지에 `Co-Authored-By: Claude` 등 AI 서명을 절대 추가하지 않는다.
+- 다른 사람으로 커밋 시 `--author`와 `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`을 함께 설정하여 Author와 Committer 모두 변경한다.
+- 파일 이동은 모두 `git mv`로 처리한다.
+- 과거 커밋을 수정하는 경우 원래 커밋한 날짜와 시간을 유지한다.
+  - cherry-pick이나 rebase 시 `--committer-date-is-author-date` 옵션을 사용한다.
+- 서로 다른 성격의 변경(fix, docs, feat 등)은 하나로 묶지 말고 각각 커밋한다.
+- 커밋 메시지는 `[prefix] 내용` 형식으로 작성한다.
+  - 제목은 변경 사항을 상세하게 작성한다.
+  - 내용이 많다면 본문에 `-` 불릿으로 추가한다.
+  - 추상적이거나 동일한 메시지를 반복하지 않는다.
+- 커밋을 만들면 별도 확인 없이 바로 push까지 이어서 실행한다.
