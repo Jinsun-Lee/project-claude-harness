@@ -1,0 +1,55 @@
+name: auto-merge
+on:
+  pull_request:
+    types:
+      - ready_for_review
+jobs:
+  merge:
+    if: github.event.pull_request.base.ref == 'master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: squash 머지
+        id: squash
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh pr merge "$PR" --repo "$REPO" --squash --delete-branch; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.squash.outputs.merged == 'false'
+        with:
+          fetch-depth: 0
+      - name: 실패 원인 확인 후 라벨·코멘트
+        if: steps.squash.outputs.merged == 'false'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          BOT_ID=$(gh api "/users/${BOT}%5Bbot%5D" --jq .id)
+          git config user.name "${BOT}[bot]"
+          git config user.email "${BOT_ID}+${BOT}[bot]@users.noreply.github.com"
+          git fetch origin "$HEAD_REF" master
+          git checkout -B "$HEAD_REF" "origin/$HEAD_REF"
+          if git merge origin/master --no-commit --no-ff; then
+            git merge --abort || true
+            gh pr comment "$PR" --repo "$REPO" --body "자동 머지 실패: 충돌 또는 오류로 머지하지 못했습니다. 사람 확인이 필요합니다."
+          else
+            FILES=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+            git merge --abort || true
+            gh pr edit "$PR" --repo "$REPO" --add-label conflict
+            gh pr comment "$PR" --repo "$REPO" --body "$(printf '🤖 자동 머지 실패: master와 충돌이 있습니다.\n\n충돌 파일:\n%s\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)' "$FILES")"
+          fi
+          exit 1

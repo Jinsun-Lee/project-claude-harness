@@ -1,0 +1,27 @@
+name: pr-bot
+on:
+  push:
+    branches-ignore:
+      - master
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: draft PR 생성
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}
+          BRANCH: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          pr=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[].number' | head -1)
+          if [ -z "$pr" ]; then
+            title=$(printf '%s' "$COMMIT_MSG" | head -n 1 | sed 's/ *\[ready\]//')
+            gh pr create --repo "$REPO" --base master --head "$BRANCH" --draft --title "$title" --body "${BOT}[bot]가 자동 생성한 draft PR입니다."
+          fi

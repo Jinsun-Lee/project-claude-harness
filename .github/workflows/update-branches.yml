@@ -1,0 +1,50 @@
+name: update-branches
+on:
+  push:
+    branches: [master]
+concurrency:
+  group: update-branches
+  cancel-in-progress: true
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+      - name: merge master into open PR branches
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}
+        run: |
+          BOT_ID=$(gh api "/users/${BOT}%5Bbot%5D" --jq .id)
+          git config user.name "${BOT}[bot]"
+          git config user.email "${BOT_ID}+${BOT}[bot]@users.noreply.github.com"
+          for ROW in $(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName,isDraft --jq '.[] | select(.isDraft == false) | "\(.number):\(.headRefName)"'); do
+            PR="${ROW%%:*}"; BRANCH="${ROW#*:}"
+            git fetch origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            if git merge origin/master --no-edit; then
+              git push origin "$BRANCH"
+            else
+              FILES=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+              git merge --abort || true
+              MARKER="<!-- auto-update-conflict:$(git rev-parse --short origin/master) -->"
+              if gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json comments --jq '.comments[].body' | grep -qF "$MARKER"; then
+                echo "already commented for this master state"
+              else
+                gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label conflict
+                gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$(printf '%s\n🤖 master 자동 갱신 충돌: 브랜치는 충돌 난 상태 그대로 둡니다. 충돌 파일:\n%s\n해결은 사람이 합니다.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)' "$MARKER" "$FILES")"
+              fi
+            fi
+            git checkout --detach origin/master
+          done
